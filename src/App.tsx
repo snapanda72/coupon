@@ -1,16 +1,12 @@
 import { useState, useEffect, ChangeEvent, FormEvent } from "react";
 import { 
-  Camera, 
-  Check, 
   User, 
   Sparkles, 
   Search, 
   Clock, 
   Plus, 
   Minus, 
-  RefreshCw, 
-  Gift,
-  X,
+  X, 
   Trash2
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
