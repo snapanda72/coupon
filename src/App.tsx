@@ -67,6 +67,15 @@ export default function App() {
   // Status check messages
   const [systemMessage, setSystemMessage] = useState<{ text: string; type: "success" | "info" | "error" } | null>(null);
 
+  // Custom dialog confirmation modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string;
+    message: string;
+    confirmText: string;
+    isDanger: boolean;
+    onConfirm: () => void;
+  } | null>(null);
+
   // Active loaded client
   const activeCustomer = customers.find(c => c.id === selectedCustomerId) || customers[0] || null;
   const customerCards = activeCustomer?.cards || [];
@@ -264,66 +273,80 @@ export default function App() {
   const handleUseVoucher = async (name: string, type: "postcard" | "freeShoot") => {
     if (!activeCard) return;
     const giftLabel = type === "postcard" ? "[엽서 사이즈 2장 인화]" : "[촬영 1회 전액 무료]";
-    if (!window.confirm(`선택하신 ${giftLabel} 혜택에 상품권 사은품을 지급 완료하시겠습니까?`)) {
-      return;
-    }
 
-    try {
-      const response = await fetch(`/api/customer/${encodeURIComponent(name)}/use-voucher`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ voucherType: type, cardId: activeCard.id })
-      });
+    setConfirmModal({
+      title: "기프트 혜택 지급 완료",
+      message: `선택하신 ${giftLabel} 혜택에 상품권 사은품을 지급 완료하시겠습니까?`,
+      confirmText: "지급완료 처리",
+      isDanger: false,
+      onConfirm: async () => {
+        setConfirmModal(null);
+        try {
+          const response = await fetch(`/api/customer/${encodeURIComponent(name)}/use-voucher`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ voucherType: type, cardId: activeCard.id })
+          });
 
-      if (response.ok) {
-        await fetchData();
-        showMsg(`사은품 '${giftLabel}' 혜택을 성공적으로 지급/사용 처리하였습니다!`, "success");
-      } else {
-        const errObj = await response.json();
-        showMsg(errObj.error || "사용 도중 오류가 발생했습니다.");
+          if (response.ok) {
+            await fetchData();
+            showMsg(`사은품 '${giftLabel}' 혜택을 성공적으로 지급/사용 처리하였습니다!`, "success");
+          } else {
+            const errObj = await response.json();
+            showMsg(errObj.error || "사용 도중 오류가 발생했습니다.");
+          }
+        } catch (e) {
+          console.error(e);
+          showMsg("서버 통신 실패");
+        }
       }
-    } catch (e) {
-      console.error(e);
-      showMsg("서버 통신 실패");
-    }
+    });
   };
 
   // Delete customer and their coupon cards
   const handleDeleteCustomer = async (id: string, name: string) => {
-    if (!window.confirm(`⚠️ 정말로 '${name}' 고객 정보와 관련 쿠폰 적립 내역을 영구 삭제하시겠습니까?`)) {
-      return;
-    }
+    setConfirmModal({
+      title: "⚠️ 회원 정보 영구 삭제 원격 승인",
+      message: `정말로 '${name}' 고객의 정보 및 보유하고 계신 전체 스탬프/쿠폰 적립 이력 로그를 영구 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`,
+      confirmText: "영구 삭제 승인",
+      isDanger: true,
+      onConfirm: async () => {
+        setConfirmModal(null);
+        try {
+          const response = await fetch(`/api/customer/${id}`, {
+            method: "DELETE"
+          });
 
-    try {
-      const response = await fetch(`/api/customer/${id}`, {
-        method: "DELETE"
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        showMsg(data.message || `'${name}' 고객이 성공적으로 삭제되었습니다.`, "success");
-        
-        // Remove from local list and update selected
-        setCustomers(prev => {
-          const updated = prev.filter(c => c.id !== id);
-          if (selectedCustomerId === id) {
-            if (updated.length > 0) {
-              setSelectedCustomerId(updated[0].id);
-            } else {
-              setSelectedCustomerId("");
+          if (response.ok) {
+            const data = await response.json();
+            showMsg(data.message || `'${name}' 고객이 성공적으로 삭제되었습니다.`, "success");
+            
+            // Refresh customer list first to maintain perfect sync
+            const custRes = await fetch("/api/customers");
+            if (custRes.ok) {
+              const custData = await custRes.json();
+              setCustomers(custData);
+              
+              // Select the first customer of the remaining list if deleted was selected
+              const remaining = custData.filter((c: any) => c.id !== id);
+              if (selectedCustomerId === id) {
+                if (remaining.length > 0) {
+                  setSelectedCustomerId(remaining[0].id);
+                } else {
+                  setSelectedCustomerId("");
+                }
+              }
             }
+          } else {
+            const errObj = await response.json().catch(() => ({ error: "알 수 없는 에러" }));
+            showMsg(errObj.error || "삭제에 실패했습니다.");
           }
-          return updated;
-        });
-        await fetchData();
-      } else {
-        const errObj = await response.json().catch(() => ({ error: "알 수 없는 에러" }));
-        showMsg(errObj.error || "삭제에 실패했습니다.");
+        } catch (err) {
+          console.error(err);
+          showMsg("서버 삭제 통신 실패");
+        }
       }
-    } catch (err) {
-      console.error(err);
-      showMsg("서버 삭제 통신 실패");
-    }
+    });
   };
 
   // Filter customers with search name
@@ -826,6 +849,48 @@ export default function App() {
         <p>© 2026 Studio Lens Photography ledger. All rights reserved.</p>
         <p className="font-mono text-[9px]">designed for self-checking counter</p>
       </footer>
+
+      {/* ⚠️ IFRAME COMPATIBLE CUSTOM MODAL POPUP */}
+      <AnimatePresence>
+        {confirmModal && (
+          <div className="fixed inset-0 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="bg-white rounded-3xl border border-stone-200 shadow-xl max-w-md w-full p-6 space-y-4 text-left"
+            >
+              <h3 className={`text-md font-bold ${confirmModal.isDanger ? 'text-red-600' : 'text-stone-900'}`}>
+                {confirmModal.title}
+              </h3>
+              <p className="text-xs text-stone-600 leading-relaxed">
+                {confirmModal.message}
+              </p>
+              <div className="flex gap-2 justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmModal(null)}
+                  className="px-4 py-2 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                >
+                  취소
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmModal.onConfirm}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold text-white transition-colors cursor-pointer ${
+                    confirmModal.isDanger
+                      ? "bg-red-600 hover:bg-red-700 font-sans"
+                      : "bg-stone-900 hover:bg-stone-800 font-sans"
+                  }`}
+                >
+                  {confirmModal.confirmText}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
     </div>
   );
