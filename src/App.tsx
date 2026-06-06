@@ -262,6 +262,34 @@ export default function App() {
     }
   };
 
+  // Toggle Benefit/Voucher Given/Used Check state
+  const handleToggleVoucher = async (name: string, type: "postcard" | "freeShoot", isUsed: boolean) => {
+    if (!activeCard) return;
+    try {
+      const response = await fetch(`/api/customer/${encodeURIComponent(name)}/toggle-voucher`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          voucherType: type, 
+          cardId: activeCard.id,
+          isUsed
+        })
+      });
+
+      if (response.ok) {
+        await fetchData();
+        const label = type === "postcard" ? "'엽서 사이즈 2장 인화'" : "'촬영 1회 무료 상품'";
+        showMsg(`${label} 혜택이 ${isUsed ? "지급 완료" : "지급 대기"} 상태로 설정되었습니다.`, "success");
+      } else {
+        const errObj = await response.json();
+        showMsg(errObj.error || "혜택 체크 업데이트 도중 오류가 발생했습니다.");
+      }
+    } catch (e) {
+      console.error(e);
+      showMsg("서버 통신 실패");
+    }
+  };
+
   // Delete customer and their coupon cards
   const handleDeleteCustomer = async (id: string, name: string) => {
     setConfirmModal({
@@ -577,6 +605,85 @@ export default function App() {
                       </button>
                     );
                   })}
+                </div>
+              </div>
+
+              {/* 🎁 BENEFIT CHECKLIST FOR REDEEM TRACKING */}
+              <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-xs space-y-4">
+                <div className="flex justify-between items-center border-b border-stone-100 pb-2">
+                  <h4 className="text-xs font-bold text-stone-500 uppercase tracking-widest flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-stone-400" />
+                    실시간 쿠폰 혜택 지급 여부 체크
+                  </h4>
+                  <span className="text-[10px] font-mono font-medium text-stone-400">
+                    선택된 쿠폰: {activeCard ? customerCards.indexOf(activeCard) + 1 : 1}번 고유식별판
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* 4 Stamps: Postcard */}
+                  <label className={`flex items-center gap-3.5 p-4 rounded-xl border transition-all cursor-pointer ${
+                    activeCard?.postcardUsed
+                      ? "bg-stone-50 border-stone-200 opacity-80"
+                      : activeCard && activeCard.stamps >= 4
+                        ? "bg-[#F0FDF4] border-emerald-200 ring-1 ring-emerald-100"
+                        : "bg-stone-50/50 border-stone-100 opacity-60"
+                  }`}>
+                    <input
+                      type="checkbox"
+                      checked={!!activeCard?.postcardUsed}
+                      onChange={(e) => {
+                        if (!activeCard) return;
+                        handleToggleVoucher(activeCustomer.name, "postcard", e.target.checked);
+                      }}
+                      className="w-4 h-4 rounded text-stone-900 border-stone-300 focus:ring-stone-500 accent-stone-900 cursor-pointer"
+                    />
+                    <div className="space-y-0.5 select-none flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[9px] font-mono font-extrabold uppercase bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded">
+                          4칸 도장
+                        </span>
+                        <span className="text-xs font-bold text-stone-800">엽서 사이즈 2장 인화</span>
+                      </div>
+                      <p className="text-[10px] text-stone-500 font-medium">
+                        {activeCard && activeCard.stamps >= 4 
+                          ? (activeCard.postcardUsed ? "✅ 사은품 지급완료" : "✨ 지급 가능 (체크하여 완료)") 
+                          : `🔒 미달성 (달성까지 ${activeCard ? 4 - activeCard.stamps : 4}칸 남음)`}
+                      </p>
+                    </div>
+                  </label>
+
+                  {/* 8 Stamps: Free Shoot */}
+                  <label className={`flex items-center gap-3.5 p-4 rounded-xl border transition-all cursor-pointer ${
+                    activeCard?.freeShootUsed
+                      ? "bg-stone-50 border-stone-200 opacity-80"
+                      : activeCard && activeCard.stamps >= 8
+                        ? "bg-rose-50/50 border-rose-200 ring-1 ring-rose-100"
+                        : "bg-stone-50/50 border-stone-100 opacity-60"
+                  }`}>
+                    <input
+                      type="checkbox"
+                      checked={!!activeCard?.freeShootUsed}
+                      onChange={(e) => {
+                        if (!activeCard) return;
+                        handleToggleVoucher(activeCustomer.name, "freeShoot", e.target.checked);
+                      }}
+                      className="w-4 h-4 rounded text-stone-900 border-stone-300 focus:ring-stone-500 accent-stone-900 cursor-pointer"
+                    />
+                    <div className="space-y-0.5 select-none flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[9px] font-mono font-extrabold uppercase bg-rose-100 text-rose-800 px-1.5 py-0.5 rounded">
+                          8칸 도장
+                        </span>
+                        <span className="text-xs font-bold text-stone-800">촬영 1회 무료 상품</span>
+                      </div>
+                      <p className="text-[10px] text-stone-500 font-medium">
+                        {activeCard && activeCard.stamps >= 8 
+                          ? (activeCard.freeShootUsed ? "✅ 사은품 지급완료" : "✨ 지급 가능 (체크하여 완료)") 
+                          : `🔒 미달성 (달성까지 ${activeCard ? 8 - activeCard.stamps : 8}칸 남음)`}
+                      </p>
+                    </div>
+                  </label>
                 </div>
               </div>
 

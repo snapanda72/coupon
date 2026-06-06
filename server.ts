@@ -572,6 +572,65 @@ app.post("/api/customer/:name/use-voucher", (req, res) => {
   res.json(customer);
 });
 
+// 3.5. Toggle Voucher / Benefit Checked Status
+app.post("/api/customer/:name/toggle-voucher", (req, res) => {
+  const name = req.params.name;
+  const { voucherType, cardId, isUsed } = req.body; // 'postcard' or 'freeShoot', isUsed: boolean
+
+  const customer = customers.find(c => c.name.toLowerCase() === name.trim().toLowerCase());
+  if (!customer) {
+    return res.status(404).json({ error: "고객을 찾을 수 없습니다." });
+  }
+  ensureCustomerCardsAndSpawns(customer);
+
+  let targetCard = customer.cards ? customer.cards[customer.cards.length - 1] : null;
+  if (cardId && customer.cards) {
+    const found = customer.cards.find(c => c.id === cardId);
+    if (found) targetCard = found;
+  }
+
+  if (!targetCard) {
+    return res.status(404).json({ error: "해당 쿠폰 카드를 찾을 수 없습니다." });
+  }
+
+  const setUsed = !!isUsed;
+
+  if (voucherType === "postcard") {
+    const prevUsed = targetCard.postcardUsed;
+    targetCard.postcardUsed = setUsed;
+    if (prevUsed !== setUsed) {
+      customer.history.unshift({
+        id: `h-use-${Date.now()}`,
+        date: new Date().toISOString(),
+        type: "use_postcard",
+        amount: setUsed ? -4 : 4,
+        description: setUsed 
+          ? `[체크] '엽서 사이즈 2장 인화' 혜택 지급 완료` 
+          : `[체크 해제] '엽서 사이즈 2장 인화' 혜택 지급 취소`
+      });
+    }
+  } else if (voucherType === "freeShoot") {
+    const prevUsed = targetCard.freeShootUsed;
+    targetCard.freeShootUsed = setUsed;
+    if (prevUsed !== setUsed) {
+      customer.history.unshift({
+        id: `h-use-${Date.now()}`,
+        date: new Date().toISOString(),
+        type: "use_freeshoot",
+        amount: setUsed ? -8 : 8,
+        description: setUsed 
+          ? `[체크] '촬영 1회 무료 상품' 혜택 지급 완료` 
+          : `[체크 해제] '촬영 1회 무료 상품' 혜택 지급 취소`
+      });
+    }
+  } else {
+    return res.status(400).json({ error: "올바르지 않은 혜택 코드입니다." });
+  }
+
+  ensureCustomerCardsAndSpawns(customer);
+  res.json({ success: true, customer });
+});
+
 // 4. Manual Stamp Modification by Studio Owner / Admin
 app.post("/api/customer/manual-stamps", (req, res) => {
   const { customerName, amount, operation, cardId } = req.body; // operation: 'add' or 'remove'
