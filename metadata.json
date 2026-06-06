@@ -1,0 +1,8 @@
+{
+  "name": "Remix: digital-coupon-book",
+  "description": "스튜디오 카메라 인화 촬영 스탬프 개별 적립 및 관리원 원격 1인 쿠폰 시스템입니다.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
