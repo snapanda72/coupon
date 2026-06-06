@@ -81,9 +81,6 @@ export default function App() {
   const customerCards = activeCustomer?.cards || [];
   const activeCard = customerCards.find(c => c.id === activeCardId) || customerCards[customerCards.length - 1] || null;
 
-  const postcardAvailable = activeCard ? (activeCard.stamps >= 4 && !activeCard.postcardUsed) : false;
-  const freeShootAvailable = activeCard ? (activeCard.stamps >= 8 && !activeCard.freeShootUsed) : false;
-
   // Load backend data on load
   useEffect(() => {
     fetchData();
@@ -269,40 +266,6 @@ export default function App() {
     }
   };
 
-  // Redeem/Use Voucher
-  const handleUseVoucher = async (name: string, type: "postcard" | "freeShoot") => {
-    if (!activeCard) return;
-    const giftLabel = type === "postcard" ? "[엽서 사이즈 2장 인화]" : "[촬영 1회 전액 무료]";
-
-    setConfirmModal({
-      title: "기프트 혜택 지급 완료",
-      message: `선택하신 ${giftLabel} 혜택에 상품권 사은품을 지급 완료하시겠습니까?`,
-      confirmText: "지급완료 처리",
-      isDanger: false,
-      onConfirm: async () => {
-        setConfirmModal(null);
-        try {
-          const response = await fetch(`/api/customer/${encodeURIComponent(name)}/use-voucher`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ voucherType: type, cardId: activeCard.id })
-          });
-
-          if (response.ok) {
-            await fetchData();
-            showMsg(`사은품 '${giftLabel}' 혜택을 성공적으로 지급/사용 처리하였습니다!`, "success");
-          } else {
-            const errObj = await response.json();
-            showMsg(errObj.error || "사용 도중 오류가 발생했습니다.");
-          }
-        } catch (e) {
-          console.error(e);
-          showMsg("서버 통신 실패");
-        }
-      }
-    });
-  };
-
   // Delete customer and their coupon cards
   const handleDeleteCustomer = async (id: string, name: string) => {
     setConfirmModal({
@@ -480,7 +443,6 @@ export default function App() {
             ) : (
               filteredCustomers.map((cust) => {
                 const isSelected = activeCustomer?.id === cust.id;
-                const hasUnusedGift = cust.vouchers.postcard || cust.vouchers.freeShoot;
                 const totalCardsCount = cust.cards?.length || 1;
                 
                 return (
@@ -504,9 +466,6 @@ export default function App() {
                       <div className="space-y-0.5">
                         <div className="flex items-center gap-1.5">
                           <h4 className="text-xs font-bold text-stone-900">{cust.name}</h4>
-                          {hasUnusedGift && (
-                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping" title="미사용 혜택 감지" />
-                          )}
                         </div>
                         <p className="text-[10px] text-stone-400 font-mono">ID: {cust.id.split('-')[1] || "NEW"}</p>
                       </div>
@@ -517,11 +476,6 @@ export default function App() {
                         {totalCardsCount > 1 ? `쿠폰 ${totalCardsCount}장째 (${cust.stamps}/8)` : `${cust.stamps} / 8 EA`}
                       </span>
                       <div className="flex items-center gap-1.5 mt-0.5">
-                        {hasUnusedGift && (
-                          <span className="text-[8px] font-mono font-bold uppercase bg-stone-900 text-white px-1.5 py-0.5 rounded-sm">
-                            GIFT AVAIL
-                          </span>
-                        )}
                         <button
                           title={`${cust.name} 고객 정보 삭제`}
                           onClick={(e) => {
@@ -543,7 +497,6 @@ export default function App() {
           {/* Backoffice summary footer inside list */}
           <div className="p-4 border-t border-stone-200 bg-white text-[10px] text-stone-400 font-medium space-y-1">
             <p>• 쿠폰 관리 명단: {customers.length}명</p>
-            <p>• 미지급 전용 혜택자: {customers.filter(c => c.vouchers.postcard || c.vouchers.freeShoot).length}명</p>
           </div>
         </aside>
 
@@ -624,7 +577,7 @@ export default function App() {
                       >
                         {idx + 1}번 쿠폰 ({card.stamps}/8)
                         {isLast && card.stamps < 8 ? " ✏️" : ""}
-                        {card.stamps === 8 && (card.postcardUsed && card.freeShootUsed ? " ✅ 전부소모" : " ✨ 달성")}
+                        {card.stamps === 8 && " ✅ 달성"}
                       </button>
                     );
                   })}
@@ -722,81 +675,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* VOUCHER & BENEFITS TRACKER BAR */}
-              <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-xs space-y-4">
-                <h4 className="text-xs font-bold text-stone-500 uppercase tracking-widest flex items-center gap-1">
-                  <Gift className="w-4 h-4 text-rose-500" />
-                  실시간 바우처 사은 혜택 지급 관리
-                </h4>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Milestone 4 Stamps: 엽서 사이즈 2장 */}
-                  <div className={`p-4 rounded-xl border flex justify-between items-center ${
-                    postcardAvailable 
-                      ? "bg-[#F0FDF4] border-emerald-200" 
-                      : "bg-stone-50 border-stone-100 opacity-60"
-                  }`}>
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[9px] font-mono font-extrabold uppercase bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded">
-                          4칸 도장
-                        </span>
-                        <h5 className="text-xs font-bold text-stone-900">엽서사이즈 2장 인화</h5>
-                      </div>
-                      <p className="text-[10px] text-stone-400">
-                        수령 대상 여부: {postcardAvailable ? "가능 ✨" : (activeCard?.postcardUsed ? "지급완료됨 ✅" : "미달성")}
-                      </p>
-                    </div>
-
-                    {postcardAvailable ? (
-                      <button 
-                        id="btn-redeem-postcard"
-                        onClick={() => handleUseVoucher(activeCustomer.name, "postcard")}
-                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold rounded-lg transition-colors cursor-pointer shadow-xs font-sans"
-                      >
-                        사용 완료 처리
-                      </button>
-                    ) : (
-                      <span className="text-[10px] font-bold text-stone-400">
-                        {activeCard ? (activeCard.stamps >= 4 ? "지급완료됨" : `${4 - activeCard.stamps}칸 남음`) : "-"}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Milestone 8 Stamps: 무료 촬영 1회 */}
-                  <div className={`p-4 rounded-xl border flex justify-between items-center ${
-                    freeShootAvailable 
-                      ? "bg-rose-50/40 border-rose-200" 
-                      : "bg-stone-50 border-stone-100 opacity-60"
-                  }`}>
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[9px] font-mono font-extrabold uppercase bg-rose-100 text-rose-800 px-1.5 py-0.5 rounded">
-                          8칸 완성
-                        </span>
-                        <h5 className="text-xs font-bold text-stone-900">촬영 1회 무료 상품</h5>
-                      </div>
-                      <p className="text-[10px] text-stone-400">
-                        촬영권 수령 여부: {freeShootAvailable ? "가능 ✨" : (activeCard?.freeShootUsed ? "지급완료됨 ✅" : "미달성")}
-                      </p>
-                    </div>
-
-                    {freeShootAvailable ? (
-                      <button 
-                        id="btn-redeem-freeshoot"
-                        onClick={() => handleUseVoucher(activeCustomer.name, "freeShoot")}
-                        className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-bold rounded-lg transition-colors cursor-pointer shadow-xs font-sans"
-                      >
-                        촬영 기프트 사용
-                      </button>
-                    ) : (
-                      <span className="text-[10px] font-bold text-stone-400">
-                        {activeCard ? (activeCard.stamps >= 8 ? "지급완료됨" : `${8 - activeCard.stamps}칸 남음`) : "-"}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
 
               {/* TIMELINE OF RECENT TRANSACTIONS LEDGER */}
               <div className="bg-white p-5 rounded-2xl border border-stone-200 shadow-xs space-y-3.5">
